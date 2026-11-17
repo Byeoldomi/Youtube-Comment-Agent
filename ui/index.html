@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Comment Agent Dashboard</title>
+  <link
+    rel="stylesheet"
+    as="style"
+    crossorigin
+    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 상단 미니멀 헤더 -->
+  <header class="app-header">
+    <div class="brand-area">
+      <span class="brand-dot"></span>
+      <h1 class="app-title">YOUTUBE COMMENT AGENT</h1>
+      <span class="app-badge">WORKFLOW DASHBOARD</span>
+    </div>
+    <div class="header-status">
+      <span id="globalStatusText" class="status-pill">대기 중</span>
+    </div>
+  </header>
+
+  <!-- 3단 컬럼 대시보드 레이아웃 (가로 1 : 1.2 : 1 비율) -->
+  <main class="dashboard-grid">
+    <!-- ==================== 1번째 칸 (1 Column): 영상 불러오기 및 목록 ==================== -->
+    <aside class="column col-left">
+      <section class="panel video-list-panel">
+        <div class="panel-header">
+          <span class="step-tag">01</span>
+          <h2>영상 불러오기 및 목록</h2>
+          <span id="videoCountBadge" class="count-pill">0개</span>
+        </div>
+
+        <!-- 상단: 허용 키워드('연애') 입력창 + [뜨기 직전 영상 찾기] 버튼 -->
+        <div class="search-control-box">
+          <div class="label-with-action" style="margin-bottom: 6px;">
+            <label for="searchQueryInput" class="search-label" style="margin-bottom: 0;">검색 키워드 입력</label>
+            <span class="allowed-kw-badge">현재 허용 키워드: <strong>연애</strong></span>
+          </div>
+          <div class="search-input-row">
+            <input
+              type="text"
+              id="searchQueryInput"
+              value="연애"
+              placeholder="허용 키워드 입력 (현재: 연애) 또는 영상 URL"
+              autocomplete="off"
+            />
+            <button type="button" id="btnFetchVideos" class="btn btn-primary btn-fetch">
+              뜨기 직전 영상 찾기
+            </button>
+          </div>
+
+          <!-- 뜨기 직전 영상 조건 체크박스 (조회수 1,000~5,000 & 시간당 150+) -->
+          <div class="breakout-criteria-row">
+            <label class="checkbox-label breakout-checkbox-label">
+              <input type="checkbox" id="breakoutFilterCheckbox" checked />
+              <span><strong>뜨기 직전 영상 필터:</strong> 조회수 1,000~5,000회 · 시간당 150회 이상</span>
+            </label>
+          </div>
+
+          <!-- 허용 키워드 칩 & 수집 개수 옵션 -->
+          <div class="search-sub-row">
+            <div class="quick-chips">
+              <button type="button" class="chip-btn active" data-keyword="연애">#연애 (허용 키워드)</button>
+            </div>
+            <select id="maxResultsSelect" class="compact-select" title="불러올 영상 개수">
+              <option value="5">5개</option>
+              <option value="8" selected>8개</option>
+              <option value="12">12개</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 상태별 필터 바 (전체 / 작업 대기 / 댓글 완료) -->
+        <div class="list-filter-bar">
+          <button type="button" class="filter-tab active" data-filter="all">
+            전체 (<span id="filterCountAll">0</span>)
+          </button>
+          <button type="button" class="filter-tab" data-filter="pending">
+            작업 대기 (<span id="filterCountPending">0</span>)
+          </button>
+          <button type="button" class="filter-tab" data-filter="completed">
+            댓글 완료 (<span id="filterCountCompleted">0</span>)
+          </button>
+        </div>
+
+        <!-- 영상 리스트 렌더링 영역 -->
+        <div id="videoListEmpty" class="video-list-empty">
+          <p class="empty-title">불러온 영상 목록이 없습니다.</p>
+          <p class="empty-desc">
+            상단에 허용 키워드(<strong>연애</strong>)를 입력하고 <strong>[뜨기 직전 영상 찾기]</strong> 버튼을 누르면<br />
+            <strong>조회수 1,000 ~ 5,000회 · 시간당 150회 이상</strong>의 뜨기 직전 영상을 탐색합니다.
+          </p>
+        </div>
+
+        <ul id="videoListContainer" class="video-card-list hidden"></ul>
+      </section>
+    </aside>
+
+    <!-- ==================== 2번째 칸 (1.2 Column): 영상 선택 및 AI 댓글 초안 생성 ==================== -->
+    <section class="column col-center">
+      <!-- 1번째 칸에서 영상 클릭 전 비활성(Empty) 안내 -->
+      <div id="centerEmptyState" class="empty-state-card">
+        <div class="empty-icon">▣</div>
+        <h3>1번째 칸에서 작업할 영상을 클릭해 주세요</h3>
+        <p>
+          영상을 선택하면 이 영역이 활성화되며,<br />
+          <strong>자막(스크립트)과 인기 댓글 상위 5~10개</strong>(자막이 없으면 <strong>제목 + 설명란</strong>)를 추출하여<br />
+          연애 고민 1줄 요약과 '운명원' 호기심 유도형 AI 댓글 초안을 자동 생성합니다.
+        </p>
+      </div>
+
+      <!-- 1번째 칸에서 특정 영상 클릭 시 활성화되는 영역 -->
+      <div id="centerWorkspace" class="workspace-stack hidden">
+        <!-- 상단: 선택된 영상 정보 & 추출된 소스 확인 -->
+        <article class="panel video-brief-panel">
+          <div class="panel-header">
+            <span class="step-tag">02</span>
+            <h2>선택된 영상 & 데이터 추출 상태</h2>
+            <button type="button" id="btnRecollect" class="btn btn-outline btn-sm">
+              데이터 다시 추출
+            </button>
+          </div>
+
+          <div class="video-header-row">
+            <img id="videoThumb" class="video-thumb" src="" alt="썸네일" />
+            <div class="video-meta-info">
+              <div class="meta-badges">
+                <span id="videoCompletedStatusBadge" class="meta-badge">작업 대기</span>
+                <span id="videoChannelBadge" class="meta-badge">채널명</span>
+                <span id="videoDateBadge" class="meta-badge">업로드 날짜</span>
+                <span id="transcriptSourceBadge" class="meta-badge source-highlight">추출 소스</span>
+              </div>
+              <h2 id="videoTitleText" class="video-title">영상 제목이 표시됩니다</h2>
+              <a id="videoExternalLink" href="#" target="_blank" class="video-url-link">원본 영상 링크</a>
+            </div>
+          </div>
+
+          <div class="data-viewer-tabs">
+            <button type="button" class="data-tab active" data-tab="source">
+              추출된 대본/설명란 (<span id="sourceModeLabel">자막 스크립트</span>)
+            </button>
+            <button type="button" class="data-tab" data-tab="comments">
+              인기 댓글 상위 5~10개 (<span id="commentCountNum">0</span>)
+            </button>
+          </div>
+
+          <div class="data-viewer-body">
+            <div id="tabContentSource" class="tab-pane active">
+              <div id="extractedSourceTextBox" class="scroll-text-box"></div>
+            </div>
+            <div id="tabContentComments" class="tab-pane hidden">
+              <ul id="topCommentsList" class="comments-list"></ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- 표시 항목 1: 영상 속 고민 한 줄 요약 -->
+        <article class="panel worry-summary-panel">
+          <div class="panel-header">
+            <span class="step-tag">SUMMARY</span>
+            <h2>1. 영상 속 고민 한 줄 요약</h2>
+          </div>
+
+          <div id="worryOneLineBox" class="worry-one-line-box">
+            AI가 영상 속 핵심 연애 고민을 분석 중입니다...
+          </div>
+
+          <div class="referenced-scene-row">
+            <span class="scene-tag">인용된 장면/대사 포인트</span>
+            <span id="referencedSceneText" class="scene-text">-</span>
+          </div>
+        </article>
+
+        <!-- 표시 항목 2: AI 댓글 초안 (수정 가능 텍스트박스 + 실시간 글자수 + [초안 다시 생성] 버튼) -->
+        <article class="panel comment-editor-panel">
+          <div class="panel-header">
+            <span class="step-tag">AI DRAFT</span>
+            <h2>2. AI 댓글 초안 (수정 가능)</h2>
+            <button type="button" id="btnRegenerateAI" class="btn btn-primary btn-sm">
+              ↻ 초안 다시 생성
+            </button>
+          </div>
+
+          <div class="rule-check-bar">
+            <span class="rule-pill">✓ 일반 시청자 공감 페르소나</span>
+            <span class="rule-pill">✓ '운명원' 사주/운세 호기심 유도 (거짓후기 금지)</span>
+            <span class="rule-pill">✓ 구체적 장면·대사 언급</span>
+            <span id="ruleViolationBadge" class="rule-pill hidden"></span>
+          </div>
+
+          <div class="final-editor-box">
+            <div class="editor-label-row">
+              <label for="finalCommentTextarea">댓글 초안 편집창 (직접 수정 가능)</label>
+              <div class="char-status-group">
+                <span id="charRangeStatus" class="char-range-badge">글자 수 확인 중</span>
+                <span id="charCountLabel" class="char-counter">공백 포함 0자 / 40~120자</span>
+              </div>
+            </div>
+
+            <textarea
+              id="finalCommentTextarea"
+              rows="4"
+              placeholder="영상을 선택하면 프롬프트 규칙(공백 포함 40~120자, 장면 언급, 운명원 자연스러운 호기심 유도)에 맞춘 댓글 초안이 이곳에 생성됩니다."
+            ></textarea>
+
+            <div class="regenerate-sub-row">
+              <input
+                type="text"
+                id="extraPromptInput"
+                placeholder="초안 다시 생성 시 추가 요청사항 (선택 입력, 예: 후반부 내레이션 대사를 인용해줘)"
+              />
+            </div>
+          </div>
+
+          <div class="candidates-section">
+            <label class="section-sub-label">문투 변주 대안 초안 (클릭 시 위 편집창에 즉시 적용)</label>
+            <div id="candidateCardsContainer" class="candidate-cards-grid"></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ==================== 3번째 칸 (1 Column): 크롬 프로필 선택 및 댓글 달기 실행 ==================== -->
+    <aside class="column col-right">
+      <!-- 상단: 크롬 프로필 선택(유튜브1/2/3) + 댓글 달기 실행 + 스텝 인디케이터 -->
+      <section class="panel execute-panel">
+        <div class="panel-header">
+          <span class="step-tag">03</span>
+          <h2>크롬 프로필 선택 및 댓글 달기 실행</h2>
+          <button type="button" id="btnToggleConfigModal" class="btn-link">설정 · 경로매핑 ▾</button>
+        </div>
+
+        <!-- 1. 크롬 프로필 라디오 선택 (유튜브1 / 유튜브2 / 유튜브3) + [프로필 열기 (로그인 세팅용)] -->
+        <div class="account-selector-group">
+          <div class="label-with-action account-header-row">
+            <label class="section-sub-label" style="margin-bottom: 0;">작업할 크롬 프로필 선택</label>
+            <button
+              type="button"
+              id="btnOpenLoginSession"
+              class="btn btn-outline btn-sm btn-login-setup"
+              title="자동화 우회 옵션이 적용된 크롬 창으로 유튜브 메인 화면을 열어 구글 로그인 세션을 영구 저장합니다"
+            >
+              프로필 열기 (로그인 세팅용)
+            </button>
+          </div>
+          <p class="login-setup-hint">
+            최초 1회 로그인 후 창을 닫으면 <code>./chrome_profiles/youtube_X</code>에 세션·쿠키가 영구 저장됩니다.
+          </p>
+
+          <div class="account-radio-grid" role="radiogroup" aria-label="크롬 프로필 선택">
+            <label class="account-radio-card active" data-account="유튜브1" title="./chrome_profiles/youtube_1">
+              <input type="radio" name="youtubeAccount" value="유튜브1" checked />
+              <span class="acc-title">유튜브1</span>
+              <span id="accSubLabel1" class="acc-sub">./chrome_profiles/youtube_1</span>
+              <span id="accSessionBadge1" class="acc-session-tag">초기 로그인 필요</span>
+            </label>
+
+            <label class="account-radio-card" data-account="유튜브2" title="./chrome_profiles/youtube_2">
+              <input type="radio" name="youtubeAccount" value="유튜브2" />
+              <span class="acc-title">유튜브2</span>
+              <span id="accSubLabel2" class="acc-sub">./chrome_profiles/youtube_2</span>
+              <span id="accSessionBadge2" class="acc-session-tag">초기 로그인 필요</span>
+            </label>
+
+            <label class="account-radio-card" data-account="유튜브3" title="./chrome_profiles/youtube_3">
+              <input type="radio" name="youtubeAccount" value="유튜브3" />
+              <span class="acc-title">유튜브3</span>
+              <span id="accSubLabel3" class="acc-sub">./chrome_profiles/youtube_3</span>
+              <span id="accSessionBadge3" class="acc-session-tag">초기 로그인 필요</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 게시 정책 요약 바: 영상당 1개 제한 & 하루 게시 상한(기본 10개) -->
+        <div class="policy-quota-bar">
+          <span class="policy-chip">정책: 영상당 댓글 1개 허용</span>
+          <span id="dailyQuotaBadge" class="quota-chip">오늘 게시: 0 / 10개</span>
+        </div>
+
+        <!-- 프로필 파일 잠금(SingletonLock) 안내 배너 -->
+        <div id="profileLockBanner" class="profile-lock-banner hidden" role="alert">
+          <span class="lock-banner-badge">프로필 잠금</span>
+          <span id="profileLockBannerText">이미 해당 프로필의 크롬 창이 열려 있습니다. 창을 닫고 다시 시도해주세요.</span>
+        </div>
+
+        <!-- 중복 방지 안내 배너 (이미 댓글 단 영상일 때 표시) -->
+        <div id="duplicateGuardBanner" class="duplicate-banner hidden">
+          <strong>영상당 1개 제한 적용됨:</strong> 이 영상은 이미 <span id="dupAccountName">유튜브1</span> 프로필로 댓글 작성을 완료했습니다. (영상당 댓글 1개만 허용)
+        </div>
+
+        <!-- 일일 게시 상한(기본 10개) 도달 안내 배너 -->
+        <div id="dailyLimitBanner" class="duplicate-banner hidden">
+          <strong>일일 게시 상한 도달:</strong> 오늘 게시 상한(<span id="dailyLimitBannerText">10/10개</span>)을 모두 소진하여 추가 게시가 제한됩니다.
+        </div>
+
+        <!-- 댓글 달기 실행 버튼 -->
+        <button type="button" id="btnPostComment" class="btn btn-primary btn-full btn-execute" disabled>
+          선택한 크롬 프로필로 댓글 달기 실행
+        </button>
+
+        <!-- 2. 실시간 진행 상태 4단계 스텝 인디케이터 -->
+        <div class="stepper-box">
+          <div class="stepper-header">
+            <span class="section-sub-label" style="margin:0;">실시간 브라우저 자동화 진행 단계</span>
+            <span id="currentStepTextBadge" class="step-now-pill">대기 중</span>
+          </div>
+
+          <div class="step-indicator-track">
+            <div class="step-node active" id="stepNode_IDLE" data-step="IDLE">
+              <div class="step-circle">1</div>
+              <div class="step-label">대기 중</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-node" id="stepNode_OPENING_PROFILE" data-step="OPENING_PROFILE">
+              <div class="step-circle">2</div>
+              <div class="step-label">프로필 여는 중</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-node" id="stepNode_TYPING" data-step="TYPING">
+              <div class="step-circle">3</div>
+              <div class="step-label">입력 중</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-node" id="stepNode_COMPLETED" data-step="COMPLETED">
+              <div class="step-circle">4</div>
+              <div class="step-label" id="stepCompletedLinkLabel">게시 완료 · 댓글 보기</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 에러 핸들링 및 캡처 미리보기 박스 (실패 발생 시 자동 표시) -->
+        <div id="errorCaptureCard" class="error-capture-card hidden">
+          <div class="error-card-header">
+            <span class="error-badge">⚠ 자동화 실패 · 화면 캡처됨</span>
+            <span id="errorFileNameLabel" class="error-file-label">screenshots/error.png</span>
+          </div>
+          <p id="errorReasonText" class="error-reason-text">실패 사유가 표시됩니다.</p>
+          <div id="errorImageWrap" class="error-image-wrap hidden">
+            <img id="errorScreenshotImg" src="" alt="에러 발생 시점 브라우저 캡처" />
+          </div>
+        </div>
+
+        <!-- 접이식: config.json 경로 매핑 & API 키 설정 박스 -->
+        <div id="configCollapseBox" class="config-collapse-box hidden">
+          <div class="config-collapse-title">독립 전용 프로필(./chrome_profiles/) 매핑 & API 키 설정</div>
+
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label for="geminiKeyInput">Gemini API Key <span class="req-mark">*</span></label>
+              <input type="password" id="geminiKeyInput" placeholder="AIzaSy..." autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="youtubeKeyInput">YouTube API Key <span class="opt-mark">(선택)</span></label>
+              <input type="password" id="youtubeKeyInput" placeholder="미입력 시 yt-dlp" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label for="profilesRootInput">전용 프로필 격리 루트</label>
+              <input
+                type="text"
+                id="profilesRootInput"
+                value="./chrome_profiles/"
+                readonly
+              />
+            </div>
+            <div class="form-group">
+              <label for="dailyLimitInput">하루 게시 상한 (기본 10개)</label>
+              <input
+                type="number"
+                id="dailyLimitInput"
+                value="10"
+                min="1"
+                max="100"
+              />
+            </div>
+          </div>
+
+          <div class="profile-map-grid">
+            <div class="form-group">
+              <label for="mapProfile1Input">유튜브1 전용 폴더</label>
+              <input type="text" id="mapProfile1Input" value="./chrome_profiles/youtube_1" readonly />
+            </div>
+            <div class="form-group">
+              <label for="mapProfile2Input">유튜브2 전용 폴더</label>
+              <input type="text" id="mapProfile2Input" value="./chrome_profiles/youtube_2" readonly />
+            </div>
+            <div class="form-group">
+              <label for="mapProfile3Input">유튜브3 전용 폴더</label>
+              <input type="text" id="mapProfile3Input" value="./chrome_profiles/youtube_3" readonly />
+            </div>
+          </div>
+
+          <button type="button" id="btnSaveConfig" class="btn btn-secondary btn-full">
+            config.json 설정 저장
+          </button>
+        </div>
+      </section>
+
+      <!-- 중단: 실시간 실행 로그 콘솔 -->
+      <section class="panel log-panel">
+        <div class="panel-header">
+          <span class="step-tag">LOGS</span>
+          <h2>실시간 실행 로그</h2>
+          <button type="button" id="btnClearLogs" class="btn-link">지우기</button>
+        </div>
+        <div id="logConsoleBox" class="log-console"></div>
+      </section>
+
+      <!-- 하단: 시간순 댓글 작업 히스토리 (영상 / 프로필 / 댓글 / 성공·실패 여부) -->
+      <section class="panel history-panel">
+        <div class="panel-header">
+          <span class="step-tag">HISTORY</span>
+          <h2>작업 히스토리 · 시간순 (<span id="historyCountNum">0</span>)</h2>
+          <button type="button" id="btnToggleHistorySort" class="btn-link" title="시간순 정렬 방향 전환">최신순 ▾</button>
+          <button type="button" id="btnClearHistory" class="btn-link">전체 비우기</button>
+        </div>
+        <ul id="historyListContainer" class="history-list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

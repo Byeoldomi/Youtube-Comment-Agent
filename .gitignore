@@ -1,0 +1,38 @@
+# Chrome 격리 프로필 (로그인 세션 및 쿠키 포함 - 절대 업로드 금지)
+chrome_profiles/
+data/chrome_profiles/
+
+# API 키 및 민감한 설정 파일
+config.json
+data/config.json
+.env
+.env.*
+*.env
+*.key
+*.pem
+*secret*.json
+*credentials*.json
+
+# 실행 중 생성되는 캡처 및 로컬 데이터
+screenshots/
+data/history.json
+
+# Python 빌드 / 배포 / 가상환경
+build/
+dist/
+venv/
+.venv/
+env/
+*.spec
+
+# Python 캐시 및 로그
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# IDE / OS 임시 파일
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
